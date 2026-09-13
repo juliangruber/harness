@@ -1,6 +1,6 @@
 {
   "name": "@juliangruber/harness",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "General purpose agent harness with fair research, for LLMs behind an OpenAI compatible API",
   "repository": {
     "type": "git",
