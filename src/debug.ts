@@ -1,7 +1,7 @@
 import { stderr } from 'node:process'
 import { styleText } from 'node:util'
 import type { ChatClient, Message, ToolSchema } from './llm.ts'
-import { renderMarkdown } from './markdown.ts'
+import { renderMarkdown, stripControl } from './markdown.ts'
 
 export type DebugOptions = {
   // Prefix for headers, to tell nested agents apart
@@ -29,7 +29,7 @@ function formatArguments (args: string): string {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return indent(JSON.stringify(parsed, null, 2), 2)
   return Object.entries(parsed).map(([key, value]) => {
-    const text = typeof value === 'string' ? value : JSON.stringify(value)
+    const text = stripControl(typeof value === 'string' ? value : JSON.stringify(value))
     return text.includes('\n')
       ? `  ${style('dim', `${key}:`)}\n${indent(text, 4)}`
       : `  ${style('dim', `${key}:`)} ${text}`
@@ -39,10 +39,11 @@ function formatArguments (args: string): string {
 function formatResult (content: string): string {
   if (/^\s*[[{]/.test(content)) {
     try {
-      return JSON.stringify(JSON.parse(content), null, 2)
+      return stripControl(JSON.stringify(JSON.parse(content), null, 2))
     } catch {}
   }
-  return content
+  // Tool results (web pages, MCP output) are untrusted, strip terminal escapes
+  return stripControl(content)
 }
 
 // Wraps a client to log everything exchanged with the model, including

@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { stripControl } from './markdown.ts'
 
 export type Instructions = { path: string, content: string }
 
@@ -36,7 +37,9 @@ export async function resolveInstructions (cwd: string, { trust, ask, warn }: Re
     return
   }
 
-  const lines = instructions.content.split('\n')
+  // Strip control characters, so hidden or line-rewriting text can't disguise
+  // what the file actually says in the preview the user approves
+  const lines = stripControl(instructions.content).split('\n')
   const preview = lines.slice(0, PREVIEW_LINES).map(line => `  ${line}`).join('\n')
   const more = lines.length > PREVIEW_LINES ? `\n  [${lines.length - PREVIEW_LINES} more lines]` : ''
   const answer = await ask(`Found ${instructions.path} for review:\n${preview}${more}\nUse these instructions? [y/N] `)

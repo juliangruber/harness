@@ -3,6 +3,13 @@ import { stripVTControlCharacters, styleText } from 'node:util'
 
 type Format = Parameters<typeof styleText>[0]
 
+// Removes terminal control characters (ANSI escapes, carriage returns) but
+// keeps newlines and tabs, so model or tool text can't rewrite lines, hide
+// itself, or change the terminal title when printed. Not printable: 0x00-0x08,
+// 0x0b-0x1f, 0x7f-0x9f. Kept: tab (0x09), newline (0x0a).
+export const stripControl = (text: string): string =>
+  text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+
 export type RenderOptions = {
   // true forces styles, false strips them, undefined styles only when the stream supports it
   color?: boolean
@@ -83,7 +90,7 @@ export function renderMarkdown (markdown: string, { color, stream, highlight }: 
     return [line(header), divider, ...rows.map(line)].join('\n')
   }
 
-  return block(lexer(markdown))
+  return block(lexer(stripControl(markdown)))
 }
 
 const width = (text = ''): number => stripVTControlCharacters(text).length

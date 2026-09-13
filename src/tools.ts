@@ -11,6 +11,8 @@ export type Tool = {
 
 const MAX_OUTPUT = 30_000
 const MAX_RESULTS = 200
+// Longest line grep runs a pattern against, to bound regex backtracking
+const MAX_LINE = 1000
 
 const truncate = (text: string): string =>
   text.length > MAX_OUTPUT
@@ -59,6 +61,17 @@ async function checkPath (path: string): Promise<void> {
   }
 }
 
+// Writing into .git would let a planted hook run on the next git command,
+// outside the harness. Refused even inside the working directory.
+async function checkWritePath (path: string): Promise<void> {
+  await checkPath(path)
+  if (fileRoot === undefined) return
+  const real = await realPathOf(resolve(path))
+  if (real.split(sep).includes('.git')) {
+    throw new Error(`${path} is inside a .git directory, which file tools don't write to`)
+  }
+}
+
 export const read: Tool = {
   name: 'read',
   description: 'Read a text file. For large files, use offset and limit to read a range of lines.',
@@ -90,7 +103,7 @@ export const write: Tool = {
     required: ['path', 'content']
   },
   async run ({ path, content }: { path: string, content: string }) {
-    await checkPath(path)
+    await checkWritePath(path)
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, content)
     return `Wrote ${content.length} chars to ${path}`
@@ -112,7 +125,7 @@ export const edit: Tool = {
   },
   async run ({ path, old_string: oldString, new_string: newString, replace_all: replaceAll = false }: { path: string, old_string: string, new_string: string, replace_all?: boolean }) {
     if (!oldString) throw new Error('old_string must not be empty')
-    await checkPath(path)
+    await checkWritePath(path)
     const parts = (await readFile(path, 'utf8')).split(oldString)
     const count = parts.length - 1
     if (count === 0) throw new Error(`old_string not found in ${path}`)
@@ -202,6 +215,9 @@ export const grep: Tool = {
   async run ({ pattern, path = '.', include = '**/*' }: { pattern: string, path?: string, include?: string }) {
     const regex = new RegExp(pattern)
     await checkPath(path)
+    // Cap the input each match sees, so a catastrophic-backtracking pattern
+    // can't hang on a very long line (a minified file, say)
+    const forMatch = (line: string) => line.length > MAX_LINE ? line.slice(0, MAX_LINE) : line
     const files = (await stat(path)).isFile()
       ? [path]
       : (await walk(include, path)).map(file => join(path, file))
@@ -217,13 +233,19 @@ export const grep: Tool = {
       }
       if (content.includes('\0')) continue
       content.split('\n').forEach((line, i) => {
-        if (regex.test(line)) matches.push(`${file}:${i + 1}: ${line.slice(0, 500)}`)
+        if (regex.test(forMatch(line))) matches.push(`${file}:${i + 1}: ${line.slice(0, 500)}`)
       })
       if (matches.length > MAX_RESULTS) break
     }
     return matches.length ? limitResults(matches) : 'No matches found'
   }
 }
+
+// Keeps secrets, like the LLM API key, out of commands the model runs
+const SECRET_ENV = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH/i
+
+const scrubbedEnv = (): NodeJS.ProcessEnv =>
+  Object.fromEntries(Object.entries(process.env).filter(([name]) => !SECRET_ENV.test(name)))
 
 export const bash: Tool = {
   name: 'bash',
@@ -235,7 +257,7 @@ export const bash: Tool = {
   },
   run ({ command }: { command: string }) {
     return new Promise(resolve => {
-      execFile('bash', ['-c', command], { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      execFile('bash', ['-c', command], { timeout: 120_000, maxBuffer: 10 * 1024 * 1024, env: scrubbedEnv() }, (err, stdout, stderr) => {
         let output = stdout + stderr
         if (err) output += `\n[exit ${err.code ?? err.signal}]`
         resolve(truncate(output))
