@@ -1,6 +1,6 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { bash, createToolSearch, edit, glob, grep, ls, read, restrictFileTools, write } from '../src/tools.ts'
@@ -48,9 +48,42 @@ test('file tools only access files inside the working directory', async t => {
   assert.equal(await readFile(join(outside, 'secret.txt'), 'utf8'), 'secret')
 })
 
+test('file tools refuse writing into .git', async t => {
+  const dir = await tmp(t)
+  await mkdir(join(dir, '.git/hooks'), { recursive: true })
+  restrictFileTools(dir)
+  t.after(() => restrictFileTools(undefined))
+
+  await assert.rejects(write.run({ path: join(dir, '.git/hooks/pre-commit'), content: '#!/bin/sh\necho hi' }), /inside a \.git directory/)
+  await write.run({ path: join(dir, 'ok.txt'), content: 'x' })
+  await assert.rejects(edit.run({ path: join(dir, '.git/config'), old_string: 'a', new_string: 'b' }), /inside a \.git directory/)
+})
+
 test('bash returns output and exit code', async () => {
   assert.equal(await bash.run({ command: 'echo hi' }), 'hi\n')
   assert.match(await bash.run({ command: 'echo oops >&2; exit 3' }), /oops\n\n\[exit 3\]/)
+})
+
+test('bash does not see secret environment variables', async t => {
+  process.env.AGENT_API_KEY = 'sk-secret'
+  process.env.MY_TOKEN = 'tok'
+  process.env.PLAIN_VAR = 'visible'
+  t.after(() => { delete process.env.AGENT_API_KEY; delete process.env.MY_TOKEN; delete process.env.PLAIN_VAR })
+
+  assert.equal(await bash.run({ command: 'printf %s "${AGENT_API_KEY:-none}"' }), 'none')
+  assert.equal(await bash.run({ command: 'printf %s "${MY_TOKEN:-none}"' }), 'none')
+  assert.equal(await bash.run({ command: 'printf %s "${PLAIN_VAR:-none}"' }), 'visible')
+})
+
+test('grep bounds the input a pattern runs against', async t => {
+  const dir = await tmp(t)
+  // A long line with a pattern prone to catastrophic backtracking
+  await write.run({ path: join(dir, 'big.txt'), content: `${'a'.repeat(5000)}!` })
+  const start = Date.now()
+  const out = await grep.run({ pattern: '(a+)+$', path: join(dir, 'big.txt') })
+  // The cap cuts the input the regex sees, so the pathological match returns fast
+  assert.ok(Date.now() - start < 2000, 'grep should not hang on a long line')
+  assert.match(out, /big\.txt:1:/)
 })
 
 test('write and read round trip', async t => {
