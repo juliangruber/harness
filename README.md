@@ -2,7 +2,7 @@
 
 A general purpose agent harness: it answers questions, does research and writes code. Talks to any OpenAI compatible `/v1/chat/completions` API (Ollama, llama.cpp, vLLM, LM Studio, OpenRouter, ...) and gives the model the tools OpenCode and Pi converged on: `read`, `write`, `edit`, `glob`, `grep` and `bash`.
 
-Its research is fair: it only uses sources that don't rely on ads, like Wikipedia, Wikidata and open scholarly databases, so agent traffic doesn't take income away from sites that need human visitors.
+Its research is fair: it only uses sources that don't rely on ads, like Wikipedia, Wikidata and open scholarly databases, so agent traffic doesn't take income away from sites that need human visitors. When a regular web search would help, it recommends searches for you to run yourself, sending real visits to those sites rather than scraping them.
 
 The `bash` tool runs whatever the model asks for, with your permissions. Run it in a container (see [juliangruber/agent](https://github.com/juliangruber/agent)) if that worries you.
 
