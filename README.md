@@ -8,7 +8,7 @@ The `bash` tool runs whatever the model asks for, with your permissions. Run it 
 
 ## Install
 
-Requires Node 22.17+ or 24.1+.
+Requires Node 22.17+ or 24.1+. The `github` tool needs the [`gh` CLI](https://cli.github.com), logged in with `gh auth login`.
 
 ```console
 $ npx @juliangruber/harness "what files are in this directory?"
@@ -61,6 +61,7 @@ Tools the model asks for but doesn't have are printed in red after the answer, a
 | `glob` | Find files by glob pattern, or list a directory with `*`. Includes hidden files, directories end with `/`, files show their size. Doesn't look inside `node_modules` and `.git` |
 | `grep` | Search file contents with a regular expression |
 | `bash` | Run a shell command, if checks find the other tools can't do the same and the command is safe |
+| `github` | Read from GitHub's REST API with GET requests through the `gh` CLI, as the account it's logged in with. Read only. Decodes file contents and can filter responses with jq |
 | `research` | Ask the [research agent](#research) a question |
 | `docs` | Ask the [docs agent](#docs) about software libraries and APIs |
 

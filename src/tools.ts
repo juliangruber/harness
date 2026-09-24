@@ -14,7 +14,7 @@ const MAX_RESULTS = 200
 // Longest line grep runs a pattern against, to bound regex backtracking
 const MAX_LINE = 1000
 
-const truncate = (text: string): string =>
+export const truncate = (text: string): string =>
   text.length > MAX_OUTPUT
     ? `${text.slice(0, MAX_OUTPUT)}\n[truncated ${text.length - MAX_OUTPUT} chars]`
     : text

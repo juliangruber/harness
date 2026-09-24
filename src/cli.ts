@@ -6,6 +6,7 @@ import { runAgent, systemPrompt } from './agent.ts'
 import { withBashReview } from './bashreview.ts'
 import { answerSeparator, withDebug } from './debug.ts'
 import { createDocsTool } from './docs.ts'
+import { createGithubTool } from './github.ts'
 import { resolveInstructions } from './instructions.ts'
 import { createClient, type ToolCall, type Message } from './llm.ts'
 import type { McpServer } from './mcp-servers.ts'
@@ -75,6 +76,7 @@ const subagentOptions = (label: string) => ({
 const onMcpError = (server: McpServer, err: Error) => warn(`MCP server ${server.name} unavailable: ${err.message}`)
 const research = createResearchTool(subagentOptions('research'))
 const docs = createDocsTool({ ...subagentOptions('docs'), onError: onMcpError })
+const github = createGithubTool()
 // Their answers carry sources and suggested web searches
 const subagents = new Set([research.name, docs.name])
 
@@ -84,7 +86,7 @@ const checkedBash = values.unsafe
   ? bash
   : withBashReview(bash, {
     client: values.debug ? withDebug(llm, { label: 'bash review' }) : llm,
-    tools: [...tools.filter(tool => tool !== bash), research, docs],
+    tools: [...tools.filter(tool => tool !== bash), github, research, docs],
     onReview: (_, review) => warn(
       !review.safe
         ? `WARNING: bash refused as unsafe: ${review.safety}`
@@ -93,7 +95,7 @@ const checkedBash = values.unsafe
           : `WARNING: bash used: ${review.reason}`
     )
   })
-const mainTools = [...tools.map(tool => tool === bash ? checkedBash : tool), research, docs, toolSearch]
+const mainTools = [...tools.map(tool => tool === bash ? checkedBash : tool), github, research, docs, toolSearch]
 
 const client = values.debug ? withDebug(llm) : llm
 const messages: Message[] = [{ role: 'system', content: systemPrompt(cwd(), instructions, { bashReview: !values.unsafe, restrictFiles: !values.unsafe }) }]
